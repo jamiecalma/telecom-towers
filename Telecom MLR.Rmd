@@ -20,7 +20,6 @@ towers$U.M.L.Class <- as.factor(towers$U.M.L.Class)
 ```
 
 
-
 Summary Statistics
 ```{r}
 eda <- towers[c(2, 3, 5, 6, 7, 8)]
@@ -48,6 +47,16 @@ sd(eda$Airport.)
 
 ```
 
+Checking linearity 
+```{r}
+pairs(towers[c(2, 3, 5, 6, 7, 8)])
+```
+
+```{r}
+library(corrplot)
+corrplot(cor(towers[c(2, 6, 7, 5, 3)]), method = "number")
+```
+
 Full model
 ```{r}
 lm1 <- lm(X..Towers ~ Median.Household.Income + X..Poverty + Total.households + Airport + disability...under.65, data = towers)
@@ -57,15 +66,6 @@ summary(lm1)
 ```{r}
 par(mfrow = c(1,2))
 plot(lm1, which = c(1,2))
-```
-
-```{r}
-pairs(towers[c(2, 3, 5, 6, 7, 8)])
-```
-
-```{r}
-par(mfrow = c(1,2))
-plot(lm2, which = c(1,2))
 ```
 
 Stepwise model selection
@@ -225,7 +225,7 @@ towers_clean <- new_tower[-outliers,]
 towers_clean
 ```
 
-Checking assumptions with trasnformed model with cleaned dataset (took out zeros in response variable and outliers)
+Checking assumptions with transformed model with cleaned dataset (took out zeros in response variable and outliers)
 ```{r}
 lmlogf <- lm(log(X..Towers) ~ Total.households + Airport, data = towers_clean)
 summary(lmlogf)
@@ -243,3 +243,64 @@ bptest(lmlogf)
 par(mfrow = c(1,2))
 plot(lmlogf, which = c(1,2))
 ```
+
+
+Starting from top without the outliers in dataset
+
+Full Model
+```{r}
+lma <- lm(X..Towers ~ Median.Household.Income + X..Poverty + Total.households + Airport + disability...under.65, data = towers_clean)
+summary(lma)
+```
+
+```{r}
+shapiro.test(resid(lma))
+```
+
+```{r}
+bptest(lma)
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lma, which = c(1,2))
+```
+
+Stepwise model selection
+```{r}
+lm1_stepa <- step(lma)
+lm1_stepa
+```
+
+```{r}
+anova(lm1_stepa, lma)
+```
+
+Checking assumptions for new/reduced model
+```{r}
+lma1 <- lm(X..Towers ~ Total.households + Airport, data = towers_clean)
+summary(lma1)
+```
+
+Fails the normality assumption
+```{r}
+shapiro.test(resid(lma1))
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lma1, which = c(1,2))
+```
+
+```{r}
+library(car)
+par(mfrow = c(1,1))
+boxcox(lma1)
+summary(powerTransform(lma1))
+```
+
+Number of datapoints after all the clean up in the dataset
+```{r}
+nrow(towers_clean)
+```
+
