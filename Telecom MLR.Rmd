@@ -1,0 +1,245 @@
+---
+title: "MLR Towers"
+author: "Jamie Calma, ip1134"
+date: "2023-04-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+towers <- read.csv("~/Desktop/towers.csv")
+towers <- towers[, c(1:8)]
+towers$Total.households[1] <- 14451
+
+towers$Airport <- as.factor(towers$Airport)
+towers$Total.households <- as.numeric(towers$Total.households)
+towers$U.M.L.Class <- as.factor(towers$U.M.L.Class)
+```
+
+
+
+Summary Statistics
+```{r}
+eda <- towers[c(2, 3, 5, 6, 7, 8)]
+
+eda$X..Towers <- as.numeric(eda$X..Towers)
+eda$Median.Household.Income <- as.numeric(eda$Median.Household.Income)
+eda$X..Poverty <- as.numeric(eda$X..Poverty)
+eda$Airport. <-  as.numeric(eda$Airport.)
+eda$Total.households <- as.numeric(eda$Total.households)
+eda$disability...under.65 <- as.numeric(eda$disability...under.65)
+
+mean(eda$X..Towers)
+mean(eda$Median.Household.Income)
+mean(eda$X..Poverty)
+mean(eda$Total.households)
+mean(eda$disability...under.65)
+mean(eda$Airport.)
+
+sd(eda$X..Towers)
+sd(eda$Median.Household.Income)
+sd(eda$X..Poverty)
+sd(eda$Total.households)
+sd(eda$disability...under.65)
+sd(eda$Airport.)
+
+```
+
+Full model
+```{r}
+lm1 <- lm(X..Towers ~ Median.Household.Income + X..Poverty + Total.households + Airport + disability...under.65, data = towers)
+summary(lm1)
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lm1, which = c(1,2))
+```
+
+```{r}
+pairs(towers[c(2, 3, 5, 6, 7, 8)])
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lm2, which = c(1,2))
+```
+
+Stepwise model selection
+```{r}
+lm1_step <- step(lm1)
+lm1_step
+```
+
+```{r}
+anova(lm1_step, lm1)
+```
+
+```{r}
+#Take out the 0 in the response variable to form a new dataset to prep for boxcox and transformations
+library(dplyr)
+new_tower <- towers %>% filter(X..Towers > 0)
+new_tower
+```
+
+Full model with new data set without the 0 towers to check if this in itself improves the model
+```{r}
+lm3 <- lm(X..Towers ~ Median.Household.Income + X..Poverty + Total.households + Airport + disability...under.65, data = new_tower)
+summary(lm3)
+```
+
+```{r}
+shapiro.test(resid(lm3))
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lm3, which = c(1,2))
+```
+
+Checking assumptions for new model
+```{r}
+lm4 <- lm(X..Towers ~ Total.households + Airport, data = new_tower)
+summary(lm4)
+```
+
+```{r}
+shapiro.test(resid(lm4))
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lm4, which = c(1,2))
+```
+
+```{r}
+library(car)
+par(mfrow = c(1,1))
+boxcox(lm4)
+summary(powerTransform(lm4))
+```
+
+Lambda = 0, a log transformation is needed
+
+Log Transformations:
+
+1st type -> best model out of the other combinations
+```{r}
+lmlog1 <- lm(log(X..Towers) ~ Total.households + Airport, data = new_tower)
+summary(lmlog1)
+```
+
+```{r}
+shapiro.test(resid(lmlog1))
+```
+
+```{r}
+bptest(lmlog1)
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lmlog1, which = c(1,2))
+```
+
+
+2nd type - residuals vs fitted shows a bit of a pattern 
+```{r}
+lmlog2 <- lm(log(X..Towers) ~ log(Total.households) + Airport, data = new_tower)
+summary(lmlog2)
+```
+
+```{r}
+shapiro.test(resid(lmlog2))
+```
+
+```{r}
+bptest(lmlog2)
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lmlog2, which = c(1,2))
+```
+
+
+3rd type - violates normality
+```{r}
+lmlog3 <- lm(X..Towers ~ log(Total.households) + Airport, data = new_tower)
+summary(lmlog1)
+```
+
+```{r}
+shapiro.test(resid(lmlog3))
+```
+
+```{r}
+bptest(lmlog3)
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lmlog3, which = c(1,2))
+```
+
+
+Taking out outliers
+```{r}
+#Plotting the Standardized Residuals vs Leverage Values
+   par(mfrow=c(1,1))
+   p <- 2
+   n <- nrow(new_tower)
+   plot(hatvalues(lm4), rstandard(lm4), main = "Standardized Residuals vs Leverage Values",
+          xlab ='Leverage Values (hi)',
+        ylab='Standardized Residuals (ri)')
+   
+#threshold for leverage points
+abline(v = 2*(p+1)/n, lty=2) 
+#threshold for outliers 
+abline(h = c(-2, 2), lty = 2)
+ 
+```
+
+```{r}
+#identifying the points that have high standardized residuals or leverage
+ri_towers = which(abs(rstandard(lmlog1)) > 2)
+new_tower[ri_towers,]
+```
+
+```{r}
+#identifying outliers
+hi_towers = which(abs(hatvalues(lmlog1)) > 0.20)
+new_tower[hi_towers,]
+```
+
+Take out the high leverage values and outliers from the dataset
+```{r}
+# Combine the two lists of influential observations
+outliers <- unique(c(ri_towers, hi_towers))
+
+# Remove the outliers from the dataset new_tower
+towers_clean <- new_tower[-outliers,]
+towers_clean
+```
+
+Checking assumptions with trasnformed model with cleaned dataset (took out zeros in response variable and outliers)
+```{r}
+lmlogf <- lm(log(X..Towers) ~ Total.households + Airport, data = towers_clean)
+summary(lmlogf)
+```
+
+```{r}
+shapiro.test(resid(lmlogf))
+```
+
+```{r}
+bptest(lmlogf)
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(lmlogf, which = c(1,2))
+```
